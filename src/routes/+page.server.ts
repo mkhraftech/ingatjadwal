@@ -1,5 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { addFacilityLocation, calendarAppointments, dashboardData, deleteAppointment, facilitySettingsData, getFacility, patientList, patientOptions, recordReminder, saveAppointment, saveMessageTemplate, savePatient, scheduleAppointments, softDeleteFacilityLocation } from '#lib/server/db';
+import { addFacilityLocation, addScheduleSlot, calendarAppointments, dashboardData, deleteAppointment, facilitySettingsData, getFacility, patientList, patientOptions, recordReminder, saveAppointment, saveMessageTemplate, savePatient, scheduleAppointments, softDeleteFacilityLocation, softDeleteScheduleSlot } from '#lib/server/db';
 import type { Actions, PageServerLoad } from './$types';
 
 function isoDateInJakarta(date: Date) {
@@ -21,6 +21,23 @@ function shiftMonth(month: string, amount: number) {
 	return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
+function shiftDate(value: string, amount: number) {
+	const date = new Date(`${value}T00:00:00Z`);
+	date.setUTCDate(date.getUTCDate() + amount);
+	return date.toISOString().slice(0, 10);
+}
+
+function weekBounds(value: string | null) {
+	const today = isoDateInJakarta(new Date());
+	const parsed = value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00Z`) : new Date(`${today}T00:00:00Z`);
+	const valid = !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value ? value! : today;
+	const date = new Date(`${valid}T00:00:00Z`);
+	const mondayOffset = (date.getUTCDay() + 6) % 7;
+	date.setUTCDate(date.getUTCDate() - mondayOffset);
+	const start = date.toISOString().slice(0, 10);
+	return { start, end: shiftDate(start, 7) };
+}
+
 const defaultTemplates = [
 	{ stage: 'h2', body: 'Selamat pagi, {{nama_pasien}}. Kami mengingatkan jadwal terapi Anda pada {{tanggal}} pukul {{jam}} di {{lokasi}}. Mohon membalas untuk mengonfirmasi kehadiran. Terima kasih.' },
 	{ stage: 'h1', body: 'Selamat pagi, {{nama_pasien}}. Kami mengingatkan jadwal terapi Anda besok, {{tanggal}} pukul {{jam}} di {{lokasi}}. Mohon membalas untuk mengonfirmasi kehadiran. Terima kasih.' },
@@ -36,16 +53,21 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const requestedView = url.searchParams.get('view') ?? 'dashboard';
 	const view = requestedView === 'kalender' ? 'jadwal' : requestedView;
 	if (view === 'pengaturan' && !['owner', 'admin'].includes(facility.role)) redirect(303, '/');
-	const scheduleView = requestedView === 'kalender' || url.searchParams.get('mode') === 'calendar' ? 'calendar' : 'table';
+	const mode = url.searchParams.get('mode');
+	const scheduleView: 'calendar' | 'week' | 'table' = mode === 'week' ? 'week' : mode === 'table' ? 'table' : 'calendar';
 	const calendarMonth = monthBounds(url.searchParams.get('month'));
+	const calendarWeek = weekBounds(url.searchParams.get('week'));
+	const scheduleRange = scheduleView === 'week'
+		? { start: `${calendarWeek.start}T00:00:00+07:00`, end: `${calendarWeek.end}T00:00:00+07:00` }
+		: { start: calendarMonth.start, end: calendarMonth.end };
 	const needsDashboard = view === 'dashboard' || view === 'pengingat';
 	const needsSettings = view === 'pengaturan' || view === 'jadwal';
 	const [dashboard, patients, calendarRows, scheduleRows, settings] = await Promise.all([
 		needsDashboard ? dashboardData(locals.supabase, facility.id) : Promise.resolve(null),
 		view === 'pasien' ? patientList(locals.supabase, facility.id) : view === 'jadwal' ? patientOptions(locals.supabase, facility.id) : Promise.resolve([]),
-		view === 'jadwal' && scheduleView === 'calendar' ? calendarAppointments(locals.supabase, facility.id, calendarMonth.start, calendarMonth.end) : Promise.resolve([]),
+		view === 'jadwal' && scheduleView !== 'table' ? calendarAppointments(locals.supabase, facility.id, scheduleRange.start, scheduleRange.end) : Promise.resolve([]),
 		view === 'jadwal' && scheduleView === 'table' ? scheduleAppointments(locals.supabase, facility.id) : Promise.resolve([]),
-		needsSettings ? facilitySettingsData(locals.supabase, facility.id) : Promise.resolve({ templates: [], locations: [] })
+		needsSettings ? facilitySettingsData(locals.supabase, facility.id) : Promise.resolve({ templates: [], locations: [], scheduleSlots: [] })
 	]);
 	const today = isoDateInJakarta(new Date());
 	const appointments = dashboard?.appointments ?? scheduleRows;
@@ -79,6 +101,10 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		view,
 		scheduleView,
 		calendarMonth: calendarMonth.month,
+		calendarWeekStart: calendarWeek.start,
+		calendarWeekEnd: shiftDate(calendarWeek.start, 6),
+		previousWeek: shiftDate(calendarWeek.start, -7),
+		nextWeek: shiftDate(calendarWeek.start, 7),
 		previousMonth: shiftMonth(calendarMonth.month, -1),
 		nextMonth: shiftMonth(calendarMonth.month, 1),
 		calendarAppointments: calendarRows.map((appointment: any) => {
@@ -102,6 +128,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			sessions: patient.appointments?.[0]?.count ?? 0
 		})),
 		locations: settings.locations,
+		scheduleSlots: settings.scheduleSlots,
 		templates: defaultTemplates.map((template) => ({ ...template, ...(settings.templates.find((saved: any) => saved.stage === template.stage) ?? {}) }))
 	};
 };
@@ -161,6 +188,24 @@ export const actions: Actions = {
 		if (!['owner', 'admin'].includes(facility.role)) return fail(403, { error: 'Hanya pemilik atau admin yang dapat mengubah pengaturan.' });
 		try { await softDeleteFacilityLocation(locals.supabase, facility.id, user.id, await request.formData()); return { success: 'Lokasi berhasil dinonaktifkan.' }; }
 		catch (error) { return fail(400, { error: error instanceof Error ? error.message : 'Lokasi belum dapat dinonaktifkan.' }); }
+	},
+	scheduleSlot: async ({ request, locals }) => {
+		const { user } = await locals.safeGetSession();
+		if (!user || !locals.supabase) redirect(303, '/login');
+		const facility = await getFacility(locals.supabase);
+		if (!facility) redirect(303, '/setup');
+		if (!['owner', 'admin'].includes(facility.role)) return fail(403, { error: 'Hanya pemilik atau admin yang dapat mengubah jadwal master.' });
+		try { await addScheduleSlot(locals.supabase, facility.id, user.id, await request.formData()); return { success: 'Slot jadwal berhasil ditambahkan.' }; }
+		catch (error) { return fail(400, { error: error instanceof Error ? error.message : 'Slot jadwal belum dapat ditambahkan.' }); }
+	},
+	deleteScheduleSlot: async ({ request, locals }) => {
+		const { user } = await locals.safeGetSession();
+		if (!user || !locals.supabase) redirect(303, '/login');
+		const facility = await getFacility(locals.supabase);
+		if (!facility) redirect(303, '/setup');
+		if (!['owner', 'admin'].includes(facility.role)) return fail(403, { error: 'Hanya pemilik atau admin yang dapat mengubah jadwal master.' });
+		try { await softDeleteScheduleSlot(locals.supabase, facility.id, user.id, await request.formData()); return { success: 'Slot jadwal berhasil dihapus.' }; }
+		catch (error) { return fail(400, { error: error instanceof Error ? error.message : 'Slot jadwal belum dapat dihapus.' }); }
 	},
 	reminder: async ({ request, locals }) => {
 		const { user } = await locals.safeGetSession();

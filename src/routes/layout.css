@@ -112,3 +112,39 @@ button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{ou
 .template-help code{color:#a85636}
 .button.outline:hover{border-color:#dbad8d}
 button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline-color:#cf754d}
+.settings-panel.schedule-master{grid-column:1/-1}
+.schedule-slot-form{display:grid;grid-template-columns:minmax(160px,1fr) minmax(140px,1fr) auto;align-items:end;gap:10px;padding:0 18px 12px}
+.schedule-slot-form label{display:grid;gap:7px;color:#435b4b;font-size:14px;font-weight:650}
+.schedule-slot-form input,.schedule-slot-form select{height:42px;width:100%;border:1px solid #cbd8cd;border-radius:8px;background:#f6f7f4;padding:0 11px;color:#30483a;font:inherit;font-size:14px}
+.schedule-slot-note{margin:0 18px 14px;color:#718076;font-size:12px}
+.schedule-slot-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-top:1px solid #dce5dc}
+.schedule-slot-day{display:grid;grid-template-columns:90px minmax(0,1fr);align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid #e4ebe4}
+.schedule-slot-day:nth-child(odd){border-right:1px solid #e4ebe4}
+.schedule-slot-day>strong{color:#405747;font-size:13px}
+.schedule-slot-chips{display:flex;flex-wrap:wrap;align-items:center;gap:7px}
+.schedule-slot-chips>small{color:#89968c;font-size:12px}
+.schedule-slot-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 5px 4px 9px;border:1px solid #e6cbb7;border-radius:20px;background:#fbf0e7;color:#a85636;font-size:12px;font-weight:700}
+.schedule-slot-chip form{margin:0}
+.schedule-slot-chip button{display:grid;place-items:center;width:23px;height:23px;border:0;border-radius:50%;background:transparent;color:#a85636}
+.schedule-slot-chip button:hover{background:#f2ddce}
+.calendar-slot-list{display:flex;flex-wrap:wrap;gap:4px;max-height:56px;overflow:auto;margin:0 0 4px}
+.calendar-slot{display:inline-flex;align-items:center;gap:2px;padding:3px 5px;border:1px solid #e8cbb6;border-radius:6px;background:#fbf0e6;color:#a85636;font-size:10px;font-weight:700;line-height:1.2;white-space:nowrap}
+.calendar-slot:hover{background:#f4e2d2;border-color:#d8a987}
+.calendar-slot.taken{border-color:#d7e2d8;background:#e8efe9;color:#68796e}
+.calendar-week-scroll{overflow-x:auto}
+.calendar-week-grid{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));min-width:1050px}
+.calendar-week-day{min-height:370px;padding:10px;border-right:1px solid #d5dfd5;border-bottom:1px solid #d5dfd5;background:#f2f5f1}
+.calendar-week-day:last-child{border-right:0}
+.calendar-week-day.today{background:#fbf4ed}
+.calendar-week-day>header{display:flex;align-items:center;justify-content:space-between;padding-bottom:9px;margin-bottom:8px;border-bottom:1px solid #dce5dc}
+.calendar-week-day>header>div{display:grid;gap:3px}
+.calendar-week-day>header span{color:#68796e;font-size:11px;font-weight:650}
+.calendar-week-day>header strong{color:#344d3e;font-family:Georgia,serif;font-size:23px;font-weight:500}
+.calendar-week-day.today>header strong{color:#bd6442}
+.calendar-week-day .calendar-slot-list{display:grid;max-height:none;margin:0 0 8px}
+.calendar-week-day .calendar-slot{justify-content:flex-start;width:100%;min-height:32px;padding:6px 8px;font-size:11px}
+.calendar-week-empty-add{display:inline-flex;align-items:center;gap:5px;margin-bottom:9px;padding:6px 8px;border:1px dashed #d8b49b;border-radius:7px;background:#fbf0e7;color:#a85636;font-size:11px;font-weight:650}
+.calendar-week-empty-add:hover{background:#f4e2d2}
+.calendar-week-day .calendar-event{margin-top:6px}
+@media(max-width:700px){.schedule-slot-form{grid-template-columns:1fr 1fr}.schedule-slot-form .button{grid-column:1/-1;justify-self:start}.schedule-slot-list{grid-template-columns:1fr}.schedule-slot-day:nth-child(odd){border-right:0}}
+.calendar-slot-summary{display:flex;flex-wrap:wrap;gap:3px 7px;margin:0 0 7px;color:#53665a;font-size:11px;font-weight:650}.calendar-slot-summary span{white-space:nowrap}.calendar-slot-summary span:nth-child(2){color:#985031}.calendar-slot-summary span:nth-child(3){color:#326c42}

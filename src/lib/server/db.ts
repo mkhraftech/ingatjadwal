@@ -98,13 +98,48 @@ export async function patientOptions(supabase: SupabaseClient, facilityId: strin
 }
 
 export async function facilitySettingsData(supabase: SupabaseClient, facilityId: string) {
-	const [templatesResult, locationsResult] = await Promise.all([
+	const [templatesResult, locationsResult, scheduleSlotsResult] = await Promise.all([
 		supabase.from('message_templates').select('stage, body, active').eq('facility_id', facilityId).is('deleted_at', null).order('stage'),
-		supabase.from('facility_locations').select('uid, name').eq('facility_id', facilityId).eq('active', true).is('deleted_at', null).order('name')
+		supabase.from('facility_locations').select('uid, name').eq('facility_id', facilityId).eq('active', true).is('deleted_at', null).order('name'),
+		supabase.from('facility_schedule_slots').select('uid, weekday, slot_time').eq('facility_id', facilityId).is('deleted_at', null).order('weekday').order('slot_time')
 	]);
 	if (templatesResult.error) throw new Error(templatesResult.error.message);
 	if (locationsResult.error) throw new Error(locationsResult.error.message);
-	return { templates: templatesResult.data ?? [], locations: locationsResult.data ?? [] };
+	if (scheduleSlotsResult.error) throw new Error(scheduleSlotsResult.error.message);
+	return { templates: templatesResult.data ?? [], locations: locationsResult.data ?? [], scheduleSlots: scheduleSlotsResult.data ?? [] };
+}
+
+export async function addScheduleSlot(supabase: SupabaseClient, facilityId: string, userId: string, form: FormData) {
+	const weekday = Number(form.get('weekday'));
+	const slotTime = String(form.get('slot_time') ?? '');
+	if (!Number.isInteger(weekday) || weekday < 1 || weekday > 7 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slotTime)) {
+		throw new Error('Pilih hari dan jam slot yang valid.');
+	}
+	const { error } = await supabase.from('facility_schedule_slots').insert({
+		facility_id: facilityId,
+		weekday,
+		slot_time: `${slotTime}:00`,
+		created_by: userId,
+		updated_by: userId
+	});
+	if (error?.code === '23505') throw new Error('Slot pada hari dan jam tersebut sudah terdaftar.');
+	if (error) throw new Error(error.message);
+}
+
+export async function softDeleteScheduleSlot(supabase: SupabaseClient, facilityId: string, userId: string, form: FormData) {
+	const uid = String(form.get('schedule_slot_uid') ?? '');
+	if (!uid) throw new Error('Slot jadwal tidak valid.');
+	const deletedAt = new Date().toISOString();
+	const { data, error } = await supabase
+		.from('facility_schedule_slots')
+		.update({ deleted_at: deletedAt, deleted_by: userId, updated_by: userId, updated_at: deletedAt })
+		.eq('uid', uid)
+		.eq('facility_id', facilityId)
+		.is('deleted_at', null)
+		.select('uid')
+		.maybeSingle();
+	if (error) throw new Error(error.message);
+	if (!data) throw new Error('Slot jadwal tidak ditemukan.');
 }
 
 export async function savePatient(supabase: SupabaseClient, facilityId: string, form: FormData) {
