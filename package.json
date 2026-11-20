@@ -1,0 +1,56 @@
+{
+	"name": "ingatjadwal",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"imports": {
+		"#lib": "./src/lib/index.js",
+		"#lib/*": "./src/lib/*"
+	},
+	"scripts": {
+		"predev": "svelte-kit sync",
+		"dev": "node --env-file-if-exists=.env node_modules/vite/bin/vite.js dev --host 127.0.0.1",
+		"supabase:start": "npx supabase start",
+		"supabase:stop": "npx supabase stop",
+		"db:reset": "npx supabase db reset",
+		"db:push": "npx supabase db push",
+		"db:push:direct": "node --env-file-if-exists=.env scripts/push-migrations.mjs",
+		"db:inspect": "node --env-file-if-exists=.env scripts/inspect-db.mjs",
+		"prebuild": "svelte-kit sync",
+		"build": "vite build",
+		"preview": "node --env-file-if-exists=.env node_modules/vite/bin/vite.js preview",
+		"prepare": "svelte-kit sync",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"lint": "prettier --check . && eslint .",
+		"format": "prettier --write ."
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@sveltejs/adapter-node": "^6.0.4",
+		"@sveltejs/kit": "^3.3.1",
+		"@sveltejs/vite-plugin-svelte": "^7.3.1",
+		"@tailwindcss/vite": "^4.3.5",
+		"@types/node": "^24",
+		"@types/pg": "^8.23.1",
+		"eslint": "^10.15.0",
+		"eslint-config-prettier": "^10.1.8",
+		"eslint-plugin-svelte": "^3.24.1",
+		"prettier": "^3.10.1",
+		"prettier-plugin-svelte": "^4.1.1",
+		"prettier-plugin-tailwindcss": "^0.8.1",
+		"svelte": "^5.57.3",
+		"svelte-check": "^4.7.8",
+		"tailwindcss": "^4.3.5",
+		"typescript": "^6.0.3",
+		"typescript-eslint": "^8.72.2",
+		"vite": "^8.3.8"
+	},
+	"dependencies": {
+		"@lucide/svelte": "^1.76.0",
+		"@supabase/server": "^1.9.2",
+		"@supabase/ssr": "^0.12.7",
+		"@supabase/supabase-js": "^2.119.1",
+		"pg": "^8.23.1",
+		"simple-icons": "^16.38.0"
+	}
+}
