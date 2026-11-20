@@ -32,6 +32,7 @@
 		"@tailwindcss/vite": "^4.3.5",
 		"@types/node": "^24",
 		"@types/pg": "^8.23.1",
+		"@types/web-push": "^3.6.4",
 		"eslint": "^10.15.0",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.24.1",
@@ -51,6 +52,7 @@
 		"@supabase/ssr": "^0.12.7",
 		"@supabase/supabase-js": "^2.119.1",
 		"pg": "^8.23.1",
-		"simple-icons": "^16.38.0"
+		"simple-icons": "^16.38.0",
+		"web-push": "^4.0.0"
 	}
 }

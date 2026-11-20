@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { scheduleDuration } from "#lib/schedule-duration";
 	import { enhance } from '$app/forms';
 	import CalendarDays from '@lucide/svelte/icons/calendar-days';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
@@ -22,7 +23,7 @@
 		service_label: string;
 		status: string;
 	};
-	type ScheduleSlot = { uid: string; weekday: number; slot_time: string };
+	type ScheduleSlot = { uid: string; weekday: number; slot_time: string; slot_end: string };
 	type Patient = { uid: string; name: string };
 	type MessageTemplate = { stage: string; body: string };
 	type CalendarData = {
@@ -47,7 +48,9 @@
 	let showCalendarModal = $state(false);
 	let selectedCalendarDate = $state('');
 	let selectedCalendarTime = $state('');
-	let calendarTimeLocked = $state(false);
+	let selectedSlot = $state<ScheduleSlot | undefined>();
+	let selectedEnd = $state('');
+	const duration = $derived(scheduleDuration(selectedCalendarTime, selectedEnd));
 	let selectedPatientUids = $state<string[]>([]);
 	let expandedCalendarDays = $state<string[]>([]);
 	const filteredAppointments = $derived(selectedPatientUids.length
@@ -96,13 +99,19 @@
 	function timeOnly(value: string) {
 		return new Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 	}
+	function appointmentTimeRange(item: Appointment) {
+		const end = new Date(Date.parse(item.starts_at) + item.duration_minutes * 60_000).toISOString();
+		const nextDay = dateInJakarta(end) !== dateInJakarta(item.starts_at);
+		return timeOnly(item.starts_at) + ' - ' + timeOnly(end) + (nextDay ? ' (+1 hari)' : '');
+	}
 	function dateTime(value: string) {
 		return new Intl.DateTimeFormat('id-ID', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }).format(new Date(value));
 	}
-	function openCalendarModal(day: string, time = '') {
+	function openCalendarModal(day: string, slot?: ScheduleSlot) {
 		selectedCalendarDate = day;
-		selectedCalendarTime = time.slice(0, 5);
-		calendarTimeLocked = Boolean(time);
+		selectedSlot = slot;
+		selectedCalendarTime = slot?.slot_time.slice(0, 5) ?? '';
+		selectedEnd = slot?.slot_end.slice(0, 5) ?? '';
 		showCalendarModal = true;
 	}
 	function toggleCalendarFullscreen() {
@@ -145,8 +154,8 @@
 	<div><p class="eyebrow">OPERASIONAL</p><h1>Jadwal</h1><p class="subheading">Atur sesi berdasarkan slot waktu yang tersedia.</p></div>
 	<div class="schedule-heading-actions">
 		<div class="schedule-view-toggle">
-			<a class:active={data.scheduleView === 'calendar'} href={`/?view=jadwal&mode=calendar&month=${data.calendarMonth}`}><CalendarDays size={15} /> Kalender</a>
 			<a class:active={data.scheduleView === 'week'} href={`/?view=jadwal&mode=week&week=${data.calendarWeekStart}`}>Mingguan</a>
+			<a class:active={data.scheduleView === 'calendar'} href={`/?view=jadwal&mode=calendar&month=${data.calendarMonth}`}><CalendarDays size={15} /> Bulanan</a>
 		</div>
 		<button class="button primary" type="button" onclick={() => openCalendarModal(data.scheduleView === 'week' ? data.calendarWeekStart : `${data.calendarMonth}-01`)}><Plus size={16} /> Tambah jadwal</button>
 	</div>
@@ -181,9 +190,9 @@
 					<div class="calendar-day-heading" class:has-events={appointmentsForDay(day).length > 0}><span class="calendar-day-number">{Number(day.slice(8, 10))}</span><button class="calendar-day-add" type="button" onclick={() => openCalendarModal(day)} aria-label="Tambah jadwal tanggal {day}"><Plus size={15} /></button></div>
 					{#if day.slice(0, 7) === data.calendarMonth}{@render slotSummary(day)}{/if}
 					{#if day.slice(0, 7) === data.calendarMonth && slotsForDay(day).length}
-						<div class="calendar-slot-list">{#each slotsForDay(day) as slot (slot.uid)}{#if isSlotTaken(day, slot.slot_time)}<span class="calendar-slot taken" title="Slot ini sudah memiliki jadwal">{slot.slot_time.slice(0, 5)} · Terisi</span>{:else}<button class="calendar-slot" type="button" onclick={() => openCalendarModal(day, slot.slot_time)} title="Tambah jadwal pukul {slot.slot_time.slice(0, 5)}"><Plus size={11} /> {slot.slot_time.slice(0, 5)}</button>{/if}{/each}</div>
+						<div class="calendar-slot-list">{#each slotsForDay(day) as slot (slot.uid)}{#if isSlotTaken(day, slot.slot_time)}<span class="calendar-slot taken" title="Slot ini sudah memiliki jadwal">{slot.slot_time.slice(0, 5)}?{slot.slot_end.slice(0, 5)} · Terisi</span>{:else}<button class="calendar-slot" type="button" onclick={() => openCalendarModal(day, slot)} title="Tambah jadwal pukul {slot.slot_time.slice(0, 5)}?{slot.slot_end.slice(0, 5)}"><Plus size={11} /> {slot.slot_time.slice(0, 5)}?{slot.slot_end.slice(0, 5)}</button>{/if}{/each}</div>
 					{/if}
-					{#each visibleAppointments(day) as item (item.uid)}<article class="calendar-event"><strong>{timeOnly(item.starts_at)} · {item.name}</strong><small>{item.duration_minutes} menit · {item.location}</small><div class="calendar-event-actions"><a class="button whatsapp" href={waLink(item)} target="_blank" rel="noreferrer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={siWhatsapp.path} /></svg> Kirim</a><form method="POST" use:enhance action={deleteAction(day)} onsubmit={(event) => { if (!confirm(`Hapus jadwal ${item.name} pada ${dateTime(item.starts_at)}?`)) event.preventDefault(); }}><input type="hidden" name="appointment_uid" value={item.uid} /><button class="button danger" type="submit"><Trash2 size={14} /> Hapus</button></form></div></article>{/each}
+					{#each visibleAppointments(day) as item (item.uid)}<article class="calendar-event"><strong>{appointmentTimeRange(item)} · {item.name}</strong><small>{item.duration_minutes} menit · {item.location}</small><div class="calendar-event-actions"><a class="button whatsapp" href={waLink(item)} target="_blank" rel="noreferrer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={siWhatsapp.path} /></svg> Kirim</a><form method="POST" use:enhance action={deleteAction(day)} onsubmit={(event) => { if (!confirm(`Hapus jadwal ${item.name} pada ${dateTime(item.starts_at)}?`)) event.preventDefault(); }}><input type="hidden" name="appointment_uid" value={item.uid} /><button class="button danger" type="submit"><Trash2 size={14} /> Hapus</button></form></div></article>{/each}
 					{#if appointmentsForDay(day).length > 2}<button class="calendar-see-all" type="button" onclick={() => toggleCalendarDay(day)}>{expandedCalendarDays.includes(day) ? 'Tampilkan lebih sedikit' : `Lihat semua (+${appointmentsForDay(day).length - 2})`}</button>{/if}
 				</section>
 			{/each}
@@ -194,8 +203,8 @@
 				<section class="calendar-week-day" class:today={day === today}>
 					<header><div><span>{weekdays[(new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7]}</span><strong>{Number(day.slice(8, 10))}</strong></div><button class="calendar-day-add" type="button" onclick={() => openCalendarModal(day)} aria-label="Tambah jadwal tanggal {day}"><Plus size={15} /></button></header>
 					{@render slotSummary(day)}
-					{#if slotsForDay(day).length}<div class="calendar-slot-list weekly-slots">{#each slotsForDay(day) as slot (slot.uid)}{#if isSlotTaken(day, slot.slot_time)}<span class="calendar-slot taken" title="Slot ini sudah memiliki jadwal">{slot.slot_time.slice(0, 5)} · Terisi</span>{:else}<button class="calendar-slot" type="button" onclick={() => openCalendarModal(day, slot.slot_time)}><Plus size={12} /> {slot.slot_time.slice(0, 5)} Tambah</button>{/if}{/each}</div>{:else}<button class="calendar-week-empty-add" type="button" onclick={() => openCalendarModal(day)}><Plus size={14} /> Tambah slot tanggal</button>{/if}
-					{#each appointmentsForDay(day) as item (item.uid)}<article class="calendar-event"><strong>{timeOnly(item.starts_at)} · {item.name}</strong><small>{item.duration_minutes} menit · {item.location}</small><div class="calendar-event-actions"><a class="button whatsapp" href={waLink(item)} target="_blank" rel="noreferrer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={siWhatsapp.path} /></svg> Kirim</a><form method="POST" use:enhance action={deleteAction(day)} onsubmit={(event) => { if (!confirm(`Hapus jadwal ${item.name} pada ${dateTime(item.starts_at)}?`)) event.preventDefault(); }}><input type="hidden" name="appointment_uid" value={item.uid} /><button class="button danger" type="submit"><Trash2 size={14} /> Hapus</button></form></div></article>{/each}
+					{#if slotsForDay(day).length}<div class="calendar-slot-list weekly-slots">{#each slotsForDay(day) as slot (slot.uid)}{#if isSlotTaken(day, slot.slot_time)}<span class="calendar-slot taken" title="Slot ini sudah memiliki jadwal">{slot.slot_time.slice(0, 5)}?{slot.slot_end.slice(0, 5)} · Terisi</span>{:else}<button class="calendar-slot" type="button" onclick={() => openCalendarModal(day, slot)}><Plus size={12} /> {slot.slot_time.slice(0, 5)}?{slot.slot_end.slice(0, 5)} Tambah</button>{/if}{/each}</div>{:else}<button class="calendar-week-empty-add" type="button" onclick={() => openCalendarModal(day)}><Plus size={14} /> Tambah slot tanggal</button>{/if}
+					{#each appointmentsForDay(day) as item (item.uid)}<article class="calendar-event"><strong>{appointmentTimeRange(item)} · {item.name}</strong><small>{item.duration_minutes} menit · {item.location}</small><div class="calendar-event-actions"><a class="button whatsapp" href={waLink(item)} target="_blank" rel="noreferrer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={siWhatsapp.path} /></svg> Kirim</a><form method="POST" use:enhance action={deleteAction(day)} onsubmit={(event) => { if (!confirm(`Hapus jadwal ${item.name} pada ${dateTime(item.starts_at)}?`)) event.preventDefault(); }}><input type="hidden" name="appointment_uid" value={item.uid} /><button class="button danger" type="submit"><Trash2 size={14} /> Hapus</button></form></div></article>{/each}
 				</section>
 			{/each}
 		</div></div>
@@ -209,8 +218,10 @@
 			<form method="POST" use:enhance={() => async ({ result, update }) => { await update(); if (result.type === 'success') showCalendarModal = false; }} action={appointmentAction} class="calendar-modal-form">
 				<label>Pasien<select name="patient_uid" required><option value="">Pilih pasien</option>{#each data.patients as patient (patient.uid)}<option value={patient.uid}>{patient.name}</option>{/each}</select></label>
 				<label>Tanggal<input name="date" type="date" bind:value={selectedCalendarDate} readonly /></label>
-				<label>Jam mulai<input name="time" type="time" bind:value={selectedCalendarTime} readonly={calendarTimeLocked} required={!calendarTimeLocked} /></label>
-				<label>Durasi<select name="duration"><option value="15">15 menit</option><option value="20">20 menit</option><option value="30">30 menit</option><option value="45">45 menit</option><option value="60" selected>1 jam</option><option value="90">1 jam 30 menit</option><option value="120">2 jam</option></select></label>
+				<label>Jam mulai<input name="time" type="time" bind:value={selectedCalendarTime} readonly={Boolean(selectedSlot)} required={!Boolean(selectedSlot)} /></label>
+				{#if selectedSlot}<input type="hidden" name="schedule_slot_uid" value={selectedSlot.uid} />{/if}
+				<label>Jam selesai<input name="end_time" type="time" bind:value={selectedEnd} readonly={Boolean(selectedSlot)} required={!selectedSlot} /></label>
+				<label>Durasi<input value={duration ? duration + ' menit' : '?'} readonly /></label>
 				<label class="calendar-modal-location">Lokasi / ruang<select name="location_uid" required><option value="">Pilih lokasi</option>{#each data.locations as location (location.uid)}<option value={location.uid}>{location.name}</option>{/each}</select></label>
 				<div class="calendar-modal-actions"><button class="button outline" type="button" onclick={() => showCalendarModal = false}>Batal</button><button class="button primary" type="submit">Simpan jadwal</button></div>
 			</form>

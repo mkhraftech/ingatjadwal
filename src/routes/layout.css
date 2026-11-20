@@ -148,3 +148,35 @@ button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{ou
 .calendar-week-day .calendar-event{margin-top:6px}
 @media(max-width:700px){.schedule-slot-form{grid-template-columns:1fr 1fr}.schedule-slot-form .button{grid-column:1/-1;justify-self:start}.schedule-slot-list{grid-template-columns:1fr}.schedule-slot-day:nth-child(odd){border-right:0}}
 .calendar-slot-summary{display:flex;flex-wrap:wrap;gap:3px 7px;margin:0 0 7px;color:#53665a;font-size:11px;font-weight:650}.calendar-slot-summary span{white-space:nowrap}.calendar-slot-summary span:nth-child(2){color:#985031}.calendar-slot-summary span:nth-child(3){color:#326c42}
+
+@media(min-width:701px){.schedule-slot-form{grid-template-columns:repeat(3,minmax(0,1fr)) auto}}
+
+.schedule-master-days .schedule-slot-day { display: grid; grid-template-columns: 1fr; align-content: start; }
+.schedule-master-days h3 { margin: 0; font-size: 14px; font-weight: 700; }
+.schedule-master-days .schedule-slot-form { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0; }
+.schedule-master-days .schedule-slot-form .button { grid-column: 1 / -1; justify-self: start; }
+@media (max-width: 420px) {
+	.schedule-master-days .schedule-slot-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.settings-submenu { width: fit-content; flex-wrap: wrap; margin-bottom: 16px; }
+.settings-submenu button { padding: 8px 12px; border-radius: 6px; color: #506356; font-size: 14px; font-weight: 650; }
+.settings-submenu button[aria-pressed="true"] { background: #f5f6f3; color: #a85636; box-shadow: 0 1px 4px #1d352714; }
+
+.slot-day-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.slot-master-dialog { position: fixed; inset: 0; margin: auto; width: min(calc(100% - 32px), 480px); max-height: calc(100dvh - 32px); padding: 24px; border: 1px solid #d5dfd5; border-radius: 15px; background: #f2f5f1; color: #25382f; }
+.slot-master-dialog::backdrop { background: #17251f99; }
+.slot-master-dialog h2 { margin: 0 0 18px; font-size: 18px; font-weight: 700; }
+.slot-form-error { grid-column: 1 / -1; color: #a45232; }
+.slot-master-dialog button:disabled { opacity: .55; cursor: not-allowed; }
+
+.reminder-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; padding: 12px 16px; border: 1px solid #e6cbb7; border-radius: 10px; background: #fbf0e7; color: #78472f; }
+.reminder-banner strong { flex: 1 1 220px; font-size: 14px; }
+.reminder-stage-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 0 18px 12px; }
+.reminder-stage-counts span { padding: 8px; border-radius: 7px; background: #fbf0e7; color: #78472f; font-size: 12px; }
+.reminder-stage-counts strong { display: block; }
+
+.push-preferences { margin-bottom: 16px; }
+.push-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 18px 14px; }
+.push-message { margin: 0; padding: 0 18px 14px; color: #52665a; font-size: 14px; }
+.push-actions .button:disabled { opacity: .55; cursor: wait; }

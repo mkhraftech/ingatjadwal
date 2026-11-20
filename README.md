@@ -1,5 +1,30 @@
 # IngatJadwal
 
+## Mengaktifkan Web Push
+
+1. Dari folder `app`, tautkan CLI ke project Supabase IngatJadwal. Jalankan
+   `npx supabase db push --dry-run --remote` dan tinjau migration yang tertunda,
+   termasuk `202611210004_web_push.sql`. Setelah target dan daftar migration benar,
+   jalankan `npx supabase db push --remote`.
+2. Setelah `npm ci`, jalankan `npx web-push generate-vapid-keys` satu kali.
+   Pada Web Service dan proses terjadwal, atur `PUBLIC_VAPID_KEY` ke kunci publik,
+   `VAPID_PRIVATE_KEY` ke kunci privat, dan `VAPID_SUBJECT` ke alamat kontak
+   seperti `mailto:admin@example.com`. Simpan kunci privat di environment hosting.
+   Gunakan pasangan kunci yang sama di kedua proses dan pertahankan saat redeploy.
+3. Buat proses terjadwal dari repo dan folder aplikasi yang sama dengan Web Service.
+   Gunakan build command `npm ci`, jadwal `*/5 * * * *`, dan perintah
+   `node scripts/send-reminder-push.mjs`. Isi `DATABASE_URL` pada proses terjadwal
+   dengan URL koneksi PostgreSQL untuk project yang sama. Akun database job perlu akses
+   ke tabel pengingat dan perangkat. Web Service tidak memerlukan URL database ini.
+4. Buka aplikasi melalui HTTPS, masuk, lalu buka **Pengingat → Notifikasi perangkat**.
+   Klik **Aktifkan notifikasi**, setujui izin, lalu klik **Kirim notifikasi tes**.
+   Di iPhone dan iPad, tambahkan IngatJadwal ke Home Screen lalu buka aplikasi dari sana.
+
+Push Hari H mulai dikirim pukul 07.00 WIB untuk sesi yang belum mulai. H-1 dan H-2
+mengikuti waktu jatuh tempo pengingat. Satu proses dapat menggabungkan beberapa
+pengingat menjadi satu notifikasi per perangkat. Klik notifikasi untuk membuka menu
+Pengingat. Untuk perangkat bersama, nonaktifkan notifikasi sebelum berganti akun.
+
 Aplikasi web SvelteKit untuk manajemen jadwal terapi dan reminder tindak lanjut pasien. Stack mengikuti BookingRame: SvelteKit, Svelte 5, TypeScript, Tailwind CSS 4, Node.js, dan Supabase PostgreSQL.
 
 ## Menjalankan Supabase lokal

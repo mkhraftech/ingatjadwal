@@ -1,0 +1,7 @@
+{
+  "name": "IngatJadwal",
+  "short_name": "IngatJadwal",
+  "id": "/",
+  "start_url": "/?view=pengingat",
+  "display": "standalone"
+}

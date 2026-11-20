@@ -1,5 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { addFacilityLocation, addScheduleSlot, calendarAppointments, dashboardData, deleteAppointment, facilitySettingsData, getFacility, patientList, patientOptions, recordReminder, saveAppointment, saveMessageTemplate, savePatient, scheduleAppointments, softDeleteFacilityLocation, softDeleteScheduleSlot } from '#lib/server/db';
+import { addFacilityLocation, addScheduleSlot, calendarAppointments, dashboardData, deleteAppointment, facilitySettingsData, getFacility, patientList, patientOptions, pendingReminderCounts, recordReminder, saveAppointment, saveMessageTemplate, savePatient, scheduleAppointments, softDeleteFacilityLocation, softDeleteScheduleSlot } from '#lib/server/db';
 import type { Actions, PageServerLoad } from './$types';
 
 function isoDateInJakarta(date: Date) {
@@ -54,7 +54,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const view = requestedView === 'kalender' ? 'jadwal' : requestedView;
 	if (view === 'pengaturan' && !['owner', 'admin'].includes(facility.role)) redirect(303, '/');
 	const mode = url.searchParams.get('mode');
-	const scheduleView: 'calendar' | 'week' | 'table' = mode === 'week' ? 'week' : mode === 'table' ? 'table' : 'calendar';
+	const scheduleView: 'calendar' | 'week' | 'table' = mode === 'table'
+		? 'table'
+		: mode === 'calendar' || (requestedView === 'kalender' && !mode) ? 'calendar' : 'week';
 	const calendarMonth = monthBounds(url.searchParams.get('month'));
 	const calendarWeek = weekBounds(url.searchParams.get('week'));
 	const scheduleRange = scheduleView === 'week'
@@ -62,14 +64,15 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		: { start: calendarMonth.start, end: calendarMonth.end };
 	const needsDashboard = view === 'dashboard' || view === 'pengingat';
 	const needsSettings = view === 'pengaturan' || view === 'jadwal';
-	const [dashboard, patients, calendarRows, scheduleRows, settings] = await Promise.all([
+	const today = isoDateInJakarta(new Date());
+	const [dashboard, patients, calendarRows, scheduleRows, settings, reminderCounts] = await Promise.all([
 		needsDashboard ? dashboardData(locals.supabase, facility.id) : Promise.resolve(null),
 		view === 'pasien' ? patientList(locals.supabase, facility.id) : view === 'jadwal' ? patientOptions(locals.supabase, facility.id) : Promise.resolve([]),
 		view === 'jadwal' && scheduleView !== 'table' ? calendarAppointments(locals.supabase, facility.id, scheduleRange.start, scheduleRange.end) : Promise.resolve([]),
 		view === 'jadwal' && scheduleView === 'table' ? scheduleAppointments(locals.supabase, facility.id) : Promise.resolve([]),
-		needsSettings ? facilitySettingsData(locals.supabase, facility.id) : Promise.resolve({ templates: [], locations: [], scheduleSlots: [] })
+		needsSettings ? facilitySettingsData(locals.supabase, facility.id) : Promise.resolve({ templates: [], locations: [], scheduleSlots: [] }),
+		pendingReminderCounts(locals.supabase, facility.id, today)
 	]);
-	const today = isoDateInJakarta(new Date());
 	const appointments = dashboard?.appointments ?? scheduleRows;
 	const reminders = dashboard?.reminders ?? [];
 	const upcoming = appointments.map((appointment: any) => {
@@ -82,7 +85,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			const reminderStage = reminder.stage === 'day_of' ? 'today' : reminder.stage;
 			return relatedAppointment?.uid === appointment.uid && reminderStage === expectedStage;
 		});
-		const stage = task && new Date(task.due_at).getTime() <= Date.now() ? expectedStage : null;
+		const stage = task && (expectedStage === 'today' || new Date(task.due_at).getTime() <= Date.now()) ? expectedStage : null;
 		return {
 			uid: appointment.uid,
 			name: patient?.display_name ?? 'Pasien',
@@ -99,6 +102,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	});
 	return {
 		view,
+		reminderCounts,
 		scheduleView,
 		calendarMonth: calendarMonth.month,
 		calendarWeekStart: calendarWeek.start,

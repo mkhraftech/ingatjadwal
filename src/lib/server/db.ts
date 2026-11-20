@@ -1,4 +1,5 @@
-﻿import type { SupabaseClient } from '@supabase/supabase-js';
+import { scheduleDuration } from '#lib/schedule-duration';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function getFacility(supabase: SupabaseClient) {
 	const { data: membership, error } = await supabase
@@ -15,6 +16,31 @@ export async function getFacility(supabase: SupabaseClient) {
 	const facility = Array.isArray(membership.facility) ? membership.facility[0] : membership.facility;
 	if (!facility) return null;
 	return { ...facility, role: membership.role };
+}
+
+export async function pendingReminderCounts(supabase: SupabaseClient, facilityId: string, today: string) {
+	const now = new Date().toISOString();
+	const stages = ['day_of', 'h1', 'h2'] as const;
+	const counts = await Promise.all(stages.map(async (stage, offset) => {
+		const midnight = Date.parse(today + 'T00:00:00+07:00');
+		const start = new Date(midnight + offset * 86_400_000).toISOString();
+		const end = new Date(midnight + (offset + 1) * 86_400_000).toISOString();
+		const query = supabase.from('reminder_tasks')
+			.select('uid, appointments!inner(starts_at, status, deleted_at, patients!inner(deleted_at))', { count: 'exact', head: true })
+			.eq('facility_id', facilityId)
+			.eq('stage', stage)
+			.in('status', ['pending', 'opened_whatsapp'])
+			.is('deleted_at', null)
+			.in('appointments.status', ['scheduled', 'confirmed'])
+			.is('appointments.deleted_at', null)
+			.is('appointments.patients.deleted_at', null)
+			.gte('appointments.starts_at', start)
+			.lt('appointments.starts_at', end);
+		const { count, error } = await (stage === 'day_of' ? query : query.lte('due_at', now));
+		if (error) throw new Error(error.message);
+		return count ?? 0;
+	}));
+	return { today: counts[0], h1: counts[1], h2: counts[2] };
 }
 
 export async function dashboardData(supabase: SupabaseClient, facilityId: string) {
@@ -101,7 +127,7 @@ export async function facilitySettingsData(supabase: SupabaseClient, facilityId:
 	const [templatesResult, locationsResult, scheduleSlotsResult] = await Promise.all([
 		supabase.from('message_templates').select('stage, body, active').eq('facility_id', facilityId).is('deleted_at', null).order('stage'),
 		supabase.from('facility_locations').select('uid, name').eq('facility_id', facilityId).eq('active', true).is('deleted_at', null).order('name'),
-		supabase.from('facility_schedule_slots').select('uid, weekday, slot_time').eq('facility_id', facilityId).is('deleted_at', null).order('weekday').order('slot_time')
+		supabase.from('facility_schedule_slots').select('uid, weekday, slot_time, slot_end').eq('facility_id', facilityId).is('deleted_at', null).order('weekday').order('slot_time')
 	]);
 	if (templatesResult.error) throw new Error(templatesResult.error.message);
 	if (locationsResult.error) throw new Error(locationsResult.error.message);
@@ -112,17 +138,22 @@ export async function facilitySettingsData(supabase: SupabaseClient, facilityId:
 export async function addScheduleSlot(supabase: SupabaseClient, facilityId: string, userId: string, form: FormData) {
 	const weekday = Number(form.get('weekday'));
 	const slotTime = String(form.get('slot_time') ?? '');
+	const slotEnd = String(form.get('slot_end') ?? '');
+	const duration = scheduleDuration(slotTime, slotEnd);
 	if (!Number.isInteger(weekday) || weekday < 1 || weekday > 7 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slotTime)) {
 		throw new Error('Pilih hari dan jam slot yang valid.');
 	}
+	if (duration < 15 || duration > 240) throw new Error('Durasi slot harus 15?240 menit.');
 	const { error } = await supabase.from('facility_schedule_slots').insert({
 		facility_id: facilityId,
 		weekday,
 		slot_time: `${slotTime}:00`,
+		slot_end: slotEnd,
 		created_by: userId,
 		updated_by: userId
 	});
 	if (error?.code === '23505') throw new Error('Slot pada hari dan jam tersebut sudah terdaftar.');
+	if (error?.code === '23P01') throw new Error('Jam slot bertumpuk dengan slot lain. Pilih rentang waktu yang berbeda.');
 	if (error) throw new Error(error.message);
 }
 
@@ -156,7 +187,19 @@ export async function saveAppointment(supabase: SupabaseClient, facilityId: stri
 	const patientUid = String(form.get('patient_uid') ?? '');
 	const date = String(form.get('date') ?? '');
 	const time = String(form.get('time') ?? '');
-	const duration = Number(form.get('duration'));
+	const slotUid = String(form.get('schedule_slot_uid') ?? '');
+	let end = String(form.get('end_time') ?? '');
+	if (slotUid) {
+		const { data: slot, error } = await supabase.from('facility_schedule_slots')
+			.select('weekday, slot_time, slot_end').eq('facility_id', facilityId)
+			.eq('uid', slotUid).is('deleted_at', null).maybeSingle();
+		const weekday = new Date(date + 'T00:00:00Z').getUTCDay();
+		if (error || !slot || (weekday === 0 ? 7 : weekday) !== slot.weekday || slot.slot_time.slice(0, 5) !== time) {
+			throw new Error('Slot sudah berubah atau tidak tersedia. Pilih kembali dari kalender.');
+		}
+		end = slot.slot_end.slice(0, 5);
+	}
+	const duration = scheduleDuration(time, end);
 	const locationUid = String(form.get('location_uid') ?? '');
 	const location = String(form.get('location') ?? 'Unit Rehabilitasi').trim();
 	if (!patientUid || !locationUid || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time) || !Number.isInteger(duration) || duration < 15 || duration > 240) throw new Error('Periksa pasien, lokasi, tanggal, waktu, dan durasi sesi.');
